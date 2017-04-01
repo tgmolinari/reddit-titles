@@ -1,2 +1,4 @@
 *.json
 *.p
+errored/*
+reddit/*
