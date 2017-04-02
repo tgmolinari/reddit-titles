@@ -1,11 +1,35 @@
 # Evaluator network for image, title pairs
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import torch.utils.data
 import torch.utils.model_zoo
 import torchvision.models as models
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+
+class ScorePredictor(torch.nn.Module):
+    def __init__(self, num_chars):
+        self.num_chars = num_chars
+        img_feat_extractor = None
+        title_feat_extractor = nn.GRU(self.num_chars, 256, bidirectional=True)
+        lin1 = nn.Linear(4096 + 256 * 2, 256)
+        lin2 = nn.Linear(256, 1)
+
+    def forward(self, imgs, titles):
+        self.init_hidden(titles.size(1))
+
+        img_feat = img_feat_extractor(img)
+        title_feat, _ = title_feat_extractor(titles, self.h0)
+        # title_feat = title_feat.
+        features = torch.cat(title_feat.data, img_feat, 1)
+        x = F.elu(lin1(features))
+        return lin2(x)
+
+    def init_hidden(self, bsz):
+        self.h0 = Variable(torch.zeros(2, bsz, self.num_chars))
+
 
 
 # Modified forward for VGG so that it acts as a feature extractor
