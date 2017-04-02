@@ -2,33 +2,30 @@
 
 import torch
 import torch.utils.data
+import torch.utils.model_zoo
 import torchvision.models as models
-#from torchvision.models.resnet import ResNet
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-#import torch.nn.functional as F
-#from torch.autograd import Variable
 
 
-#def _forward(self, x):
-#    x = self.conv1(x)
-#    x = self.bn1(x)
-#    x = self.relu(x)
-#    x = self.maxpool(x)
-#
-#    x = self.layer1(x)
-#    x = self.layer2(x)
-#    x = self.layer3(x)
-#    x = self.layer4(x)
-#
-#    return x
+# Modified forward for VGG so that it acts as a feature extractor
+def _forward(self, x):
+    x = self.features(x)
+    x = x.view(x.size(0), -1)
+    x = self.classifier[0](x)
+    return x
 
-feat_extractor = models.vgg16(pretrained=False)#, batch_norm=True)
+dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
+model_url = 'https://download.pytorch.org/models/vgg16-397923af.pth'
+vgg_state_dict = torch.utils.model_zoo.load_url(model_url)
 
-# Monkeywrenching to decaptitate a pretrained net
-#fType = type(feat_extractor.forward)
-#feat_extractor.forward = fType(_forward,feat_extractor)
+feat_extractor = models.vgg16()
+feat_extractor.type(dtype)
+feat_extractor.load_state_dict(vgg_state_dict)
 
+# Monkeywrenching to decaptitate the pretrained net
+fType = type(feat_extractor.forward)
+feat_extractor.forward = fType(_forward,feat_extractor)
 
 traindir = "../to_nick/"
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -45,7 +42,7 @@ train_loader = torch.utils.data.DataLoader(
         num_workers=4, pin_memory=True)
 
 for i, (iinput, target) in enumerate(train_loader):
-	input_var = torch.autograd.Variable(iinput)
-	target_var = torch.autograd.Variable(target)
-	out = feat_extractor.features(input_var)
-	print(out)
+    input_var = torch.autograd.Variable(iinput).type(dtype)
+    target_var = torch.autograd.Variable(target).type(dtype)
+    out = feat_extractor.forward(input_var)
+
