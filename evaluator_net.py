@@ -21,7 +21,7 @@ class ScorePredictor(torch.nn.Module):
         self.num_chars = num_chars
         self.dtype = dtype
         self.init_cnn(new_cnn)
-        title_feat_extractor = nn.GRU(self.num_chars, 256, bidirectional=True)
+        self.title_feat_extractor = nn.GRU(self.num_chars, 256, bidirectional=True)
         lin1 = nn.Linear(4096 + 256 * 2, 256)
         lin2 = nn.Linear(256, 1)
 
@@ -30,15 +30,15 @@ class ScorePredictor(torch.nn.Module):
     def forward(self, imgs, titles):
         img_feat = self.img_feat_extractor(imgs)
 
-        self.init_hidden(titles.size(1))
-        title_feat, _ = title_feat_extractor(titles, self.h0)
+        self.init_hidden(imgs.size(0))
+        title_feat, _ = self.title_feat_extractor(titles, self.h0)
         # title_feat = title_feat.
-        features = torch.cat(title_feat.data, img_feat, 1)
+        features = torch.cat((title_feat.data, img_feat), 1)
         x = F.elu(lin1(features))
         return lin2(x)
 
     def init_hidden(self, bsz):
-        self.h0 = Variable(torch.zeros(2, bsz, self.num_chars))
+        self.h0 = Variable(torch.zeros(2, bsz, 256).type(self.dtype))
 
     def init_cnn(self, new_cnn):
         # Modified forward for VGG so that it acts as a feature extractor
@@ -84,7 +84,7 @@ sorted_idx = np.array(np.argsort(title_lens)[::-1])
 title_lens = np.array(title_lens)[sorted_idx]
 title_tensors = Variable(title_tensors[torch.from_numpy(sorted_idx)])
 
-packed_seq = pack_padded_sequence(title_tensors, title_lens, batch_first = True)
+packed_seq = pack_padded_sequence(title_tensors.type(dtype), title_lens, batch_first = True)
 
 padded_seq, lens = pad_packed_sequence(packed_seq, batch_first = True)
 
@@ -105,7 +105,6 @@ train_loader = torch.utils.data.DataLoader(
 
 for i, (iinput, target) in enumerate(train_loader):
     imgs = torch.autograd.Variable(iinput).type(dtype)
-    titles = torch.autograd.Variable(title_tensors).type(dtype)
     scores = model(imgs, packed_seq)
     print(scores.data)
     break
