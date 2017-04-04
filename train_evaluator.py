@@ -35,7 +35,7 @@ def train(model, args : dict):
 
 	for epoch in args.epochs:
 		total_loss = 0
-		for i, (image, title, score) in enumerate(train_loader):
+		for i, (image, title, title_lens, score) in enumerate(train_loader):
 			# because torch doesn't have an argsort, we use numpy's
 			title_lens = np.array(title_lens.tolist())
 			sorted_idx = np.array(np.argsort(title_lens)[::-1])
