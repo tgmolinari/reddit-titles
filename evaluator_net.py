@@ -26,7 +26,7 @@ class ScorePredictor(torch.nn.Module):
        
         title_feat, _ = self.title_feat_extractor(titles, self.h0)
         title_feat, lens = pad_packed_sequence(title_feat)
-        trimmed_feat = Variable(torch.FloatTensor(title_feat.size(1), title_feat.size(2))).type(dtype)
+        trimmed_feat = Variable(torch.FloatTensor(title_feat.size(1), title_feat.size(2))).type(self.dtype)
         for batch in range(title_feat.size(1)):
             trimmed_feat[batch] = title_feat[lens[batch] - 1][batch]
         
