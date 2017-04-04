@@ -1,5 +1,6 @@
 # Evaluator network for image, title pairs
 import numpy as np
+import json
 
 import torch
 import torch.nn as nn
@@ -12,7 +13,6 @@ import torchvision.datasets as datasets
 from torch.nn.utils.rnn import pack_padded_sequence
 from torch.nn.utils.rnn import pad_packed_sequence
 from torch.autograd import Variable
-import json
 
 class ScorePredictor(torch.nn.Module):
     def __init__(self, dtype, num_chars, new_cnn=False):
@@ -21,24 +21,28 @@ class ScorePredictor(torch.nn.Module):
         self.num_chars = num_chars
         self.dtype = dtype
         self.init_cnn(new_cnn)
-        self.title_feat_extractor = nn.GRU(self.num_chars, 256, bidirectional=True)
-        lin1 = nn.Linear(4096 + 256 * 2, 256)
-        lin2 = nn.Linear(256, 1)
+        self.title_feat_extractor = nn.GRU(self.num_chars, 512,)
+        self.lin1 = nn.Linear(4096 + 512, 256)
+        self.lin2 = nn.Linear(256, 1)
 
         self.type(dtype)
 
     def forward(self, imgs, titles):
         img_feat = self.img_feat_extractor(imgs)
-
         self.init_hidden(imgs.size(0))
+       
         title_feat, _ = self.title_feat_extractor(titles, self.h0)
-        # title_feat = title_feat.
-        features = torch.cat((title_feat.data, img_feat), 1)
-        x = F.elu(lin1(features))
-        return lin2(x)
+        title_feat, lens = pad_packed_sequence(title_feat)
+        trimmed_feat = Variable(torch.FloatTensor(title_feat.size(1), title_feat.size(2))).type(dtype)
+        for batch in range(title_feat.size(1)):
+            trimmed_feat[batch] = title_feat[lens[batch] - 1][batch]
+        
+        features = torch.cat((trimmed_feat, img_feat), 1)
+        x = F.elu(self.lin1(features))
+        return self.lin2(x)
 
     def init_hidden(self, bsz):
-        self.h0 = Variable(torch.zeros(2, bsz, 256).type(self.dtype))
+        self.h0 = Variable(torch.zeros(1, bsz, 512).type(self.dtype))
 
     def init_cnn(self, new_cnn):
         # Modified forward for VGG so that it acts as a feature extractor
@@ -56,7 +60,8 @@ class ScorePredictor(torch.nn.Module):
             self.img_feat_extractor.load_state_dict(vgg_state_dict)
 
         self.img_feat_extractor.type(self.dtype)
-        # Monkeywrenching to decaptitate the pretrained net
+
+        # Monkeywrenching to decapitate the pretrained net
         fType = type(self.img_feat_extractor.forward)
         self.img_feat_extractor.forward = fType(_forward,self.img_feat_extractor)
         
@@ -111,7 +116,7 @@ for i, (iinput, target) in enumerate(train_loader):
 
 
 def titles_from_padded(padded_seq):
-    new_titles = [''] * 32
+    new_titles = [''] * padded_seq.data.size(1)
     for i in range(padded_seq.data.size(0)):
         for j in range(padded_seq.data.size(1)):
             charid = np.argmax(padded_seq.data[i][j].numpy())
