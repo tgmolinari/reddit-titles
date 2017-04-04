@@ -19,7 +19,7 @@ def make_dataset(posts_json : list, img_dir, file_ext):
     posts_list = []
     for post in posts_json:
         path = os.path.join(img_dir, post['id'] + file_ext)
-        item = (path, post['title'], post['score'])
+        item = (path, post['title'], post['log_score'])
         posts_list.append(item)
     return posts_list
        
