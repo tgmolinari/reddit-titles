@@ -1,16 +1,10 @@
 # Evaluator network for image, title pairs
-import numpy as np
-import json
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.data
 import torch.utils.model_zoo
 import torchvision.models as models
-import torchvision.transforms as transforms
-import torchvision.datasets as datasets
-from torch.nn.utils.rnn import pack_padded_sequence
 from torch.nn.utils.rnn import pad_packed_sequence
 from torch.autograd import Variable
 
