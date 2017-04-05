@@ -120,7 +120,9 @@ def train(model, args):
         if epoch > 3: #arbitrarily consider hacking the learning rate 
             if last_epoch_loss/epoch_loss < .0005:
                 learning_rate = learning_rate/2
+                prev_state = optimizer.state_dict()
                 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+                optimizer.load_state_dict(prev_state)
 
 
 
