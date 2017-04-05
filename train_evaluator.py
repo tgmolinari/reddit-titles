@@ -35,8 +35,8 @@ def train(model, args):
     # specify the dataloader and dataset generator
     train_loader = data.DataLoader(
         PostFolder(posts_json, args.img_dir, transform=transforms.Compose([
-           transforms.ToTensor(),
            transforms.RandomHorizontalFlip(),
+           transforms.ToTensor(),
            normalize,
            ])),
        batch_size=args.batch_size, shuffle=True,
