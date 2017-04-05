@@ -117,12 +117,9 @@ def train(model, args):
             if batch_ctr % 1000 == 0:
                 pickle.dump(model.state_dict(), open(args.save_name + '.p', 'wb'))
         
-        if epoch > 3: #arbitrarily consider hacking the learning rate 
+        if epoch > 3: #arbitrary epoch choice 
             if last_epoch_loss/epoch_loss < .0005:
-                learning_rate = learning_rate/2
-                prev_state = optimizer.state_dict()
-                optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-                optimizer.load_state_dict(prev_state)
+                optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr']/2
 
 
 
