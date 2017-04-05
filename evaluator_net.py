@@ -9,7 +9,7 @@ from torch.nn.utils.rnn import pad_packed_sequence
 from torch.autograd import Variable
 
 class ScorePredictor(torch.nn.Module):
-    def __init__(self, dtype, num_chars=52, pretrained=True):
+    def __init__(self, dtype, num_chars, pretrained=True):
         super(ScorePredictor, self).__init__()
 
         self.dtype = dtype

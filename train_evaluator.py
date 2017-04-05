@@ -5,6 +5,7 @@ import time
 import argparse
 import pickle
 from datetime import date
+from random import randint
 
 import torch
 import torch.nn as nn
@@ -18,6 +19,12 @@ from dataset import PostFolder
 from tensorboard_logger import configure, log_value
 
 DATASET_SIZE = 682440
+NUM_CHARS = 52
+
+# proportion of batch to copy and swap images and titles (MISM_PROP) or mangle titles (MANG_PROP)
+MISM_PROP = 0.25
+MANG_PROP = 0.25
+
 # train will pull in the model, expected model is ScorePredictor
 # ScorePredictor will contain the feature extractor net from evaluator_net.py
 
@@ -47,9 +54,41 @@ def train(model, args):
 	batch_ctr = 0
 	for epoch in range(args.epochs):
 		for i, (image, title, title_lens, score) in enumerate(train_loader):
+			
+			# swapping random images and post titles
+			num_mism = int(title.size(0) * MISM_PROP)
+			mism_ind = np.random.choice(title.size(0), num_mism, replace = False)
+			mism_map = mism_ind + randint(0, title.size(0) - 1) % title.size(0)
+			mism_imgs = image[torch.from_numpy(mism_ind)]
+			mism_titles = title[torch.from_numpy(mism_map)]
+			mism_lens = title_lens[torch.from_numpy(mism_map)]
+
+			# mangling titles
+			num_mang = int(title.size(0) * MANG_PROP)
+			mang_ind = np.random.choice(title.size(0), num_mang, replace = False) 
+			title_copy = torch.FloatTensor(title)
+			chars_tensor = torch.LongTensor(torch.eye(NUM_CHARS))
+			for ind in mang_ind:
+				num_chars = randint(0, title_lens[ind])
+				mang_chars = np.random.choice(title_lens[ind], num_chars, replace = False)
+				if randint(0, 1) > 0:
+					# uniformly random character substitution
+					title_copy[ind][torch.from_numpy(mang_chars)] = chars_tensor[torch.from_numpy(np.random.randint(NUM_CHARS, num_chars))]
+				else:
+					# randomly change characters to other characters within title
+					title_copy[ind][torch.from_numpy(mang_chars)] = title_copy[ind][torch.from_numpy(np.random.randint(title_lens[ind], num_chars))]
+			mang_imgs = image[torch.from_numpy(mang_ind)]
+			mang_titles = title_copy[torch.from_numpy(mang_ind)]
+			mang_lens = title_lens[torch.from_numpy(mang_ind)]
+
+			image = torch.cat((image, mism_imgs, mang_imgs), 0)
+			title = torch.cat((title, mism_titles, mang_titles), 0)
+			title_lens = torch.cat((title_lens, mism_lens, mang_lens), 0)
+			score = torch.cat((score, torch.ones(num_mism + num_mang) * -1), 0)
+
+
 			# because torch doesn't have an argsort, we use numpy's
-			title_lens = np.array(title_lens.tolist())
-			sorted_idx = np.array(np.argsort(title_lens)[::-1])
+			sorted_idx = np.array(np.argsort(title_lens.numpy())[::-1])
 			sorted_title_lens = title_lens[sorted_idx]
 
 			image_var = autograd.Variable(image[torch.from_numpy(sorted_idx)]).type(args.dtype)
@@ -91,7 +130,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.dtype = torch.cuda.FloatTensor if torch.cuda.is_available() and args.gpu else torch.FloatTensor
     
-    model = ScorePredictor(args.dtype)
+    model = ScorePredictor(args.dtype, NUM_CHARS)
 
 	train(model, args)
-	    
