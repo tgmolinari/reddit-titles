@@ -44,8 +44,7 @@ class PostFolder(data.Dataset):
     def __init__(self, post_json, img_dir, file_ext='.jpeg', transform=None, title_transform=None,
                  loader=default_loader):
         posts = make_dataset(post_json, img_dir, file_ext)
-        if len(posts) == 0:
-            raise(RuntimeError("you specified an empty folder"))
+        
         self.img_dir = img_dir
         self.posts = posts
         self.transform = transform
@@ -58,6 +57,8 @@ class PostFolder(data.Dataset):
         if self.transform is not None:
             img = self.transform(img)
         title, title_len = self.title_transform(title)
+        if title_len == 0:
+            title, title_len  = self.title_transform(" ")
         return img, title, title_len, score
 
     def __len__(self):
