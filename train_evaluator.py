@@ -49,7 +49,8 @@ def train(model, args):
        batch_size=args.batch_size, shuffle=True,
        num_workers=8, pin_memory=True)
     learning_rate = 0.001
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam([{'params': model.title_feat_extractor.parameters(),
+            'params': model.lin1.parameters(), 'params': model.lin2.parameters()}], lr=learning_rate)
     l1_loss = nn.L1Loss()
 
     batch_ctr = 0
@@ -94,13 +95,14 @@ def train(model, args):
             # because torch doesn't have an argsort, we use numpy's
             sorted_idx = np.array(np.argsort(title_lens.numpy())[::-1])
             sorted_title_lens = title_lens.numpy()[sorted_idx]
-
             image_var = autograd.Variable(image[torch.from_numpy(sorted_idx)]).type(args.dtype)
             title_var = autograd.Variable(title[torch.from_numpy(sorted_idx)]).type(args.dtype)
             score_var = autograd.Variable(score[torch.from_numpy(sorted_idx)]).type(args.dtype)
             packed_seq = pack_padded_sequence(title_var, sorted_title_lens, batch_first = True)
 
+            print('feed forward')
             pred_score = model.forward(image_var, packed_seq)
+            print('feed forward completed')
 
             optimizer.zero_grad()
 

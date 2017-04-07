@@ -31,7 +31,7 @@ class ScorePredictor(torch.nn.Module):
             trimmed_feat[batch] = title_feat[lens[batch] - 1][batch]
         
         features = torch.cat((trimmed_feat, img_feat), 1)
-        x = F.elu(self.lin1(features))
+        x = F.leaky_relu(self.lin1(features))
         return self.lin2(x)
 
     def init_hidden(self, bsz):
@@ -51,6 +51,9 @@ class ScorePredictor(torch.nn.Module):
             model_url = 'https://download.pytorch.org/models/vgg16-397923af.pth'
             vgg_state_dict = torch.utils.model_zoo.load_url(model_url)
             self.img_feat_extractor.load_state_dict(vgg_state_dict)
+        
+        for param in self.img_feat_extractor.parameters():
+            param.requires_grad = False
 
         self.img_feat_extractor.type(self.dtype)
 
