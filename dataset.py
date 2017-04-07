@@ -1,5 +1,6 @@
 import os
 import json
+import numpy as np
 import torch
 import torch.utils.data as data
 from PIL import Image
@@ -31,14 +32,13 @@ def default_title_transform(title):
     return transformed_title, title_len
 
 def titles_from_padded(padded_seq):
-    new_titles = [''] * padded_seq.data.size(1)
+    new_titles = [''] * padded_seq.data.size(0)
     for i in range(padded_seq.data.size(0)):
         for j in range(padded_seq.data.size(1)):
             charid = np.argmax(padded_seq.data[i][j].numpy())
             if padded_seq.data[i][j][charid] == 1:
                 new_titles[i] += id2char[charid]
-    new_titles = [''.join(title) for title in new_titles]
-    return new_titles
+    return [''.join(title) for title in new_titles]
 
 class PostFolder(data.Dataset):
     def __init__(self, post_json, img_dir, file_ext='.jpeg', transform=None, title_transform=None,

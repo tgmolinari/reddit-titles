@@ -16,7 +16,7 @@ import torchvision.transforms as transforms
 from torch.nn.utils.rnn import pack_padded_sequence
 from evaluator_net import ScorePredictor
 from dataset import PostFolder
-
+from dataset import titles_from_padded
 from tensorboard_logger import configure, log_value
 
 DATASET_SIZE = 682440
@@ -64,13 +64,13 @@ def train(model, args):
             mism_ind = np.random.choice(title.size(0), num_mism, replace = False)
             mism_map = (mism_ind + randint(0, title.size(0) - 1)) % title.size(0)
             mism_imgs = image[torch.from_numpy(mism_ind)]
-            mism_titles = title[torch.from_numpy(mism_map)]
+            mism_titles = title.clone()[torch.from_numpy(mism_map)]
             mism_lens = title_lens[torch.from_numpy(mism_map)]
 
             # mangling titles
             num_mang = int(title.size(0) * MANG_PROP)
             mang_ind = np.random.choice(title.size(0), num_mang, replace = False) 
-            title_copy = torch.FloatTensor(title)
+            title_copy = title.clone()
             chars_tensor = torch.eye(NUM_CHARS)
             for ind in mang_ind:
                 num_chars_title = randint(1, title_lens[ind])
@@ -90,7 +90,6 @@ def train(model, args):
             title = torch.cat((title, mism_titles, mang_titles), 0)
             title_lens = torch.cat((title_lens, mism_lens, mang_lens), 0)
             score = torch.cat((score.type(torch.FloatTensor), torch.ones(num_mism + num_mang) * -1), 0)
-
 
             # because torch doesn't have an argsort, we use numpy's
             sorted_idx = np.array(np.argsort(title_lens.numpy())[::-1])
@@ -124,11 +123,11 @@ def train(model, args):
 
 
 parser = argparse.ArgumentParser(description='Evaluator Train')
-parser.add_argument('--batch_size', type=int, default=32,
+parser.add_argument('--batch-size', type=int, default=32,
     help='batch size (default: 32)')
-parser.add_argument('--img_dir', type=str,
+parser.add_argument('--img-dir', type=str,
     help='image directory')
-parser.add_argument('--posts_json', type=str,
+parser.add_argument('--posts-json', type=str,
     help='path to json with reddit posts')
 parser.add_argument('--save_name', type=str,
     help='file name to save model params dict')
