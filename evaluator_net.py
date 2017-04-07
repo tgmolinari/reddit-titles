@@ -9,11 +9,11 @@ from torch.nn.utils.rnn import pad_packed_sequence
 from torch.autograd import Variable
 
 class ScorePredictor(torch.nn.Module):
-    def __init__(self, dtype, num_chars, pretrained=True):
+    def __init__(self, dtype, num_chars):
         super(ScorePredictor, self).__init__()
 
         self.dtype = dtype
-        self.init_cnn(pretrained)
+        self.init_cnn()
         self.title_feat_extractor = nn.GRU(num_chars, 512,)
         self.lin1 = nn.Linear(4096 + 512, 256)
         self.lin2 = nn.Linear(256, 1)
@@ -37,7 +37,7 @@ class ScorePredictor(torch.nn.Module):
     def init_hidden(self, bsz):
         self.h0 = Variable(torch.zeros(1, bsz, 512).type(self.dtype))
 
-    def init_cnn(self, pretrained):
+    def init_cnn(self):
         # Modified forward for VGG so that it acts as a feature extractor
         def _forward(self, x):
             x = self.features(x)
@@ -47,10 +47,9 @@ class ScorePredictor(torch.nn.Module):
 
         self.img_feat_extractor = models.vgg16()
 
-        if pretrained:
-            model_url = 'https://download.pytorch.org/models/vgg16-397923af.pth'
-            vgg_state_dict = torch.utils.model_zoo.load_url(model_url)
-            self.img_feat_extractor.load_state_dict(vgg_state_dict)
+        model_url = 'https://download.pytorch.org/models/vgg16-397923af.pth'
+        vgg_state_dict = torch.utils.model_zoo.load_url(model_url)
+        self.img_feat_extractor.load_state_dict(vgg_state_dict)
         
         for param in self.img_feat_extractor.parameters():
             param.requires_grad = False
