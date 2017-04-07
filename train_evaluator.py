@@ -49,8 +49,8 @@ def train(model, args):
        batch_size=args.batch_size, shuffle=True,
        num_workers=8, pin_memory=True)
     learning_rate = 0.001
-    optimizer = optim.Adam([{'params': model.title_feat_extractor.parameters(),
-            'params': model.lin1.parameters(), 'params': model.lin2.parameters()}], lr=learning_rate)
+    optimizer = optim.Adam([{'params': model.title_feat_extractor.parameters()},
+            {'params': model.lin1.parameters()}, {'params': model.lin2.parameters()}], lr=learning_rate)
     l1_loss = nn.L1Loss()
 
     batch_ctr = 0
@@ -100,9 +100,7 @@ def train(model, args):
             score_var = autograd.Variable(score[torch.from_numpy(sorted_idx)]).type(args.dtype)
             packed_seq = pack_padded_sequence(title_var, sorted_title_lens, batch_first = True)
 
-            print('feed forward')
             pred_score = model.forward(image_var, packed_seq)
-            print('feed forward completed')
 
             optimizer.zero_grad()
 
@@ -118,9 +116,10 @@ def train(model, args):
             if batch_ctr % 1000 == 0:
                 pickle.dump(model.state_dict(), open(args.save_name + '.p', 'wb'))
         
-        if epoch > 3: #arbitrary epoch choice 
+        if epoch > 2: #arbitrary epoch choice 
             if last_epoch_loss/epoch_loss < .0005:
-                optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr']/2
+                for param in range(len(optimizer.param_groups)):
+                    optimizer.param_groups[param]['lr'] = optimizer.param_groups[param]['lr']/2
 
 
 
@@ -131,7 +130,7 @@ parser.add_argument('--img-dir', type=str,
     help='image directory')
 parser.add_argument('--posts-json', type=str,
     help='path to json with reddit posts')
-parser.add_argument('--save_name', type=str,
+parser.add_argument('--save-name', type=str,
     help='file name to save model params dict')
 parser.add_argument('--gpu', action="store_true",
     help='attempt to use gpu')
