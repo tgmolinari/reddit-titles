@@ -19,7 +19,7 @@ from dataset import titles_from_padded
 from tensorboard_logger import configure, log_value
 
 DATASET_SIZE = 682440
-NUM_CHARS = 52
+NUM_CHARS = 53
 
 # proportion of batch to copy and swap images and titles (MISM_PROP) or mangle titles (MANG_PROP)
 MISM_PROP = 0.25
