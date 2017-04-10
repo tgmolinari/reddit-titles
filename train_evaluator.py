@@ -104,10 +104,9 @@ def train(model, args):
 
             batch_loss.backward()
             optimizer.step()
-            break
             if batch_ctr % 1000 == 0:
                 pickle.dump(model.state_dict(), open(args.save_name + '.p', 'wb'))
-        break
+
         if epoch > 2: #arbitrary epoch choice 
             if last_epoch_loss/epoch_loss < .0005:
                 for param in range(len(optimizer.param_groups)):
