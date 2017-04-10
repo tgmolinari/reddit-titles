@@ -9,11 +9,10 @@ from random import randint
 
 import torch
 import torch.nn as nn
-import torch.autograd as autograd
 import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
-from torch.nn.utils.rnn import pack_padded_sequence
+from torch.autograd import Variable
 from evaluator_net import ScorePredictor
 from dataset import PostFolder
 from dataset import titles_from_padded
@@ -58,20 +57,20 @@ def train(model, args):
     for epoch in range(args.epochs):
         if epoch > 0:
             last_epoch_loss = epoch_loss
-        for i, (image, title, title_lens, score) in enumerate(train_loader):
+        for i, (images, titles, title_lens, score) in enumerate(train_loader):
 
             # swapping random images and post titles
-            num_mism = int(title.size(0) * MISM_PROP)
-            mism_ind = np.random.choice(title.size(0), num_mism, replace = False)
-            mism_map = (mism_ind + randint(0, title.size(0) - 1)) % title.size(0)
-            mism_imgs = image[torch.from_numpy(mism_ind)]
-            mism_titles = title.clone()[torch.from_numpy(mism_map)]
+            num_mism = int(titles.size(0) * MISM_PROP)
+            mism_ind = np.random.choice(titles.size(0), num_mism, replace = False)
+            mism_map = (mism_ind + randint(0, titles.size(0) - 1)) % titles.size(0)
+            mism_imgs = images[torch.from_numpy(mism_ind)]
+            mism_titles = titles.clone()[torch.from_numpy(mism_map)]
             mism_lens = title_lens[torch.from_numpy(mism_map)]
 
             # mangling titles
-            num_mang = int(title.size(0) * MANG_PROP)
-            mang_ind = np.random.choice(title.size(0), num_mang, replace = False) 
-            title_copy = title.clone()
+            num_mang = int(titles.size(0) * MANG_PROP)
+            mang_ind = np.random.choice(titles.size(0), num_mang, replace = False) 
+            title_copy = titles.clone()
             chars_tensor = torch.eye(NUM_CHARS)
             for ind in mang_ind:
                 num_chars_title = randint(1+int(title_lens[ind]*.1), title_lens[ind])
@@ -83,27 +82,20 @@ def train(model, args):
                     # randomly change characters to other characters within title
                     title_copy[ind][torch.from_numpy(mang_chars)] = title_copy[ind][torch.from_numpy(np.random.choice(title_lens[ind], num_chars_title))]
 
-            mang_imgs = image[torch.from_numpy(mang_ind)]
+            mang_imgs = images[torch.from_numpy(mang_ind)]
             mang_titles = title_copy[torch.from_numpy(mang_ind)]
             mang_lens = title_lens[torch.from_numpy(mang_ind)]
 
-            image = torch.cat((image, mism_imgs, mang_imgs), 0)
-            title = torch.cat((title, mism_titles, mang_titles), 0)
+            images = torch.cat((images, mism_imgs, mang_imgs), 0)
+            titles = torch.cat((titles, mism_titles, mang_titles), 0)
             title_lens = torch.cat((title_lens, mism_lens, mang_lens), 0)
             score = torch.cat((score.type(torch.FloatTensor), torch.ones(num_mism + num_mang) * -1), 0)
 
-            # because torch doesn't have an argsort, we use numpy's
-            sorted_idx = np.array(np.argsort(title_lens.numpy())[::-1])
-            sorted_title_lens = title_lens.numpy()[sorted_idx]
-            image_var = autograd.Variable(image[torch.from_numpy(sorted_idx)]).type(args.dtype)
-            title_var = autograd.Variable(title[torch.from_numpy(sorted_idx)]).type(args.dtype)
-            score_var = autograd.Variable(score[torch.from_numpy(sorted_idx)]).type(args.dtype)
-            packed_seq = pack_padded_sequence(title_var, sorted_title_lens, batch_first = True)
-
-            pred_score = model.forward(image_var, packed_seq)
+            pred_score = model.forward(Variable(images).type(args.dtype), Variable(titles).type(args.dtype), title_lens)
 
             optimizer.zero_grad()
 
+            score_var = Variable(score).type(args.dtype)
             batch_loss = l1_loss(pred_score, score_var)
             log_value('L1 log score loss', batch_loss.data[0], batch_ctr)
             log_value('Learning rate', optimizer.param_groups[0]['lr'], batch_ctr)
@@ -112,10 +104,10 @@ def train(model, args):
 
             batch_loss.backward()
             optimizer.step()
-
+            break
             if batch_ctr % 1000 == 0:
                 pickle.dump(model.state_dict(), open(args.save_name + '.p', 'wb'))
-        
+        break
         if epoch > 2: #arbitrary epoch choice 
             if last_epoch_loss/epoch_loss < .0005:
                 for param in range(len(optimizer.param_groups)):
