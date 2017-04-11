@@ -115,7 +115,7 @@ def train(model, args):
                 pickle.dump(model.state_dict(), open(args.save_name + '.p', 'wb'))
 
         if epoch > 2: #arbitrary epoch choice 
-            if last_epoch_loss/epoch_loss < .0005:
+            if -.003 < (last_epoch_loss - epoch_loss)/epoch_loss < .003:
                 for param in range(len(optimizer.param_groups)):
                     optimizer.param_groups[param]['lr'] = optimizer.param_groups[param]['lr']/2
 
