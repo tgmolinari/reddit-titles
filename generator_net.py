@@ -37,7 +37,7 @@ class TitleGenerator(torch.nn.Module):
             chars = self.lin2(F.leaky_relu(chars))
             for batch in range(chars.size(0)):
                 # transforms chars to one hot encoding according to max activation
-                chars[batch] = F.threshold(chars[batch] * 1 / torch.max(chars[batch]), 1, 0)
+                chars[batch] = F.threshold(chars[batch] * 1 / torch.max(chars[batch]), 1-1e-5, 0)
             titles[:][t] = chars
 
         title_lens = []
