@@ -27,7 +27,6 @@ class FeatureExtractor(object):
         fType = type(self.model.forward)
         self.model.forward = fType(_forward,self.model)
 
-        
     def make_features(self, img_batch):
         img_batch = self.model.forward(img_batch)
         return img_batch
