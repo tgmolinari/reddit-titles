@@ -15,7 +15,6 @@ class ScorePredictor(torch.nn.Module):
         super(ScorePredictor, self).__init__()
 
         self.dtype = dtype
-        self.init_cnn()
         self.title_feat_extractor = nn.GRU(num_chars, 512,)
         self.lin1 = nn.Linear(4096 + 512, 256)
         self.lin2 = nn.Linear(256, 1)
@@ -31,7 +30,6 @@ class ScorePredictor(torch.nn.Module):
         titles = titles[torch.from_numpy(sorted_idx).cuda()]
         packed_seq = pack_padded_sequence(titles, sorted_title_lens, batch_first = True)
 
-        img_feat = self.img_feat_extractor(images)
         self.init_hidden(images.size(0))
        
         title_feat, _ = self.title_feat_extractor(packed_seq, self.h0)
@@ -42,7 +40,7 @@ class ScorePredictor(torch.nn.Module):
         for batch in range(title_feat.size(1)):
             trimmed_feat[batch] = title_feat[lens[batch] - 1][batch]
         
-        features = torch.cat((trimmed_feat, img_feat), 1)
+        features = torch.cat((trimmed_feat, images), 1)
         x = F.leaky_relu(self.lin1(features))
         x = self.lin2(x)
         return x[torch.from_numpy(np.argsort(sorted_idx)).cuda()] # TODO: this too 
@@ -50,25 +48,3 @@ class ScorePredictor(torch.nn.Module):
     def init_hidden(self, bsz):
         self.h0 = Variable(torch.zeros(1, bsz, 512).type(self.dtype))
 
-    def init_cnn(self):
-        # Modified forward for VGG so that it acts as a feature extractor
-        def _forward(self, x):
-            x = self.features(x)
-            x = x.view(x.size(0), -1)
-            x = self.classifier[0](x)
-            return x
-
-        self.img_feat_extractor = models.vgg16()
-
-        model_url = 'https://download.pytorch.org/models/vgg16-397923af.pth'
-        vgg_state_dict = torch.utils.model_zoo.load_url(model_url)
-        self.img_feat_extractor.load_state_dict(vgg_state_dict)
-        
-        for param in self.img_feat_extractor.parameters():
-            param.requires_grad = False
-
-        self.img_feat_extractor.type(self.dtype)
-
-        # Monkeywrenching to decapitate the pretrained net
-        fType = type(self.img_feat_extractor.forward)
-        self.img_feat_extractor.forward = fType(_forward,self.img_feat_extractor)

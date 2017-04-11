@@ -14,6 +14,7 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 from evaluator_net import ScorePredictor
+from feat_extractor import FeatureExtractor
 from dataset import PostFolder
 from dataset import titles_from_padded
 from tensorboard_logger import configure, log_value
@@ -47,6 +48,9 @@ def train(model, args):
            ])),
        batch_size=args.batch_size, shuffle=True,
        num_workers=8, pin_memory=True)
+
+    image_feature_extractor = FeatureExtractor(args.dtype)
+    
     learning_rate = 0.001
     optimizer = optim.Adam([{'params': model.title_feat_extractor.parameters()},
             {'params': model.lin1.parameters()}, {'params': model.lin2.parameters()}], lr=learning_rate)
@@ -86,12 +90,14 @@ def train(model, args):
             mang_titles = title_copy[torch.from_numpy(mang_ind)]
             mang_lens = title_lens[torch.from_numpy(mang_ind)]
 
+            images = image_feature_extractor.make_features(Variable(images).type(args.dtype))
+
             images = torch.cat((images, mism_imgs, mang_imgs), 0)
             titles = torch.cat((titles, mism_titles, mang_titles), 0)
             title_lens = torch.cat((title_lens, mism_lens, mang_lens), 0)
             score = torch.cat((score.type(torch.FloatTensor), torch.ones(num_mism + num_mang) * -1), 0)
 
-            pred_score = model.forward(Variable(images).type(args.dtype), Variable(titles).type(args.dtype), title_lens)
+            pred_score = model.forward(images, Variable(titles).type(args.dtype), title_lens)
 
             optimizer.zero_grad()
 
@@ -123,6 +129,8 @@ parser.add_argument('--posts-json', type=str,
     help='path to json with reddit posts')
 parser.add_argument('--save-name', type=str,
     help='file name to save model params dict')
+parser.add_argument('--load-name', type=str,
+    help='file name to load model params dict')
 parser.add_argument('--gpu', action="store_true",
     help='attempt to use gpu')
 parser.add_argument('--epochs', type=int, default=9999999999999,
@@ -133,5 +141,7 @@ if __name__ == '__main__':
     args.dtype = torch.cuda.FloatTensor if torch.cuda.is_available() and args.gpu else torch.FloatTensor
 
     model = ScorePredictor(args.dtype, NUM_CHARS)
+    if args.load_name is not None:
+        model.load_state_dict(pickle.load(open(args.load_name + '.p', 'rb')))
 
     train(model, args)
