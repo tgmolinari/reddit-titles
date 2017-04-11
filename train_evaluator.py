@@ -90,12 +90,13 @@ def train(model, args):
             mang_titles = title_copy[torch.from_numpy(mang_ind)]
             mang_lens = title_lens[torch.from_numpy(mang_ind)]
 
-            images = image_feature_extractor.make_features(Variable(images).type(args.dtype))
-
             images = torch.cat((images, mism_imgs, mang_imgs), 0)
             titles = torch.cat((titles, mism_titles, mang_titles), 0)
             title_lens = torch.cat((title_lens, mism_lens, mang_lens), 0)
             score = torch.cat((score.type(torch.FloatTensor), torch.ones(num_mism + num_mang) * -1), 0)
+
+            images = image_feature_extractor.make_features(Variable(images).type(args.dtype))
+
 
             pred_score = model.forward(images, Variable(titles).type(args.dtype), title_lens)
 
