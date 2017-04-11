@@ -62,3 +62,21 @@ class PostFolder(data.Dataset):
 
     def __len__(self):
         return len(self.posts)
+
+class ImageFolder(data.Dataset):
+    def __init__(self, post_json, img_dir, file_ext='.jpeg', transform=None,
+                 loader=default_loader):
+        posts = make_dataset(post_json, img_dir, file_ext)
+        
+        self.img_dir = img_dir
+        self.posts = posts
+        self.transform = transform
+        self.loader = loader
+
+    def __getitem__(self, index):
+        path, title, score = self.posts[index]
+        img = self.loader(path)
+        return img
+
+    def __len__(self):
+        return len(self.posts)
