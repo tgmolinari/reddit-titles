@@ -75,6 +75,8 @@ class ImageFolder(data.Dataset):
 
     def __getitem__(self, index):
         path, title, score = self.posts[index]
+        if self.transform is not None:
+            img = self.transform(img)
         img = self.loader(path)
         return img
 

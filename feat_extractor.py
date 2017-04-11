@@ -14,7 +14,7 @@ class FeatureExtractor(object):
         self.model.type(self.dtype)
         
         self.model.load_state_dict(vgg_state_dict)
-            def _forward(self, x):
+        def _forward(self, x):
             x = self.features(x)
             x = x.view(x.size(0), -1)
             x = self.classifier[0](x)
@@ -25,7 +25,7 @@ class FeatureExtractor(object):
             param.requires_grad = False
         # Monkeywrenching to decapitate the pretrained net
         fType = type(self.model.forward)
-        self.model.forward = fType(self._forward,self.model)
+        self.model.forward = fType(_forward,self.model)
 
         
     def make_features(self, img_batch):
