@@ -32,12 +32,12 @@ def default_title_transform(title):
         transformed_title[i, char2id[char]] = 1
     return transformed_title, title_len
 
-def titles_from_padded(padded_seq):
-    new_titles = [''] * padded_seq.data.size(0)
-    for i in range(padded_seq.data.size(0)):
-        for j in range(padded_seq.data.size(1)):
-            charid = np.argmax(padded_seq.data[i][j].numpy())
-            if padded_seq.data[i][j][charid] == 1:
+def titles_from_padded(padded_seq, title_lens):
+    new_titles = [''] * padded_seq.size(0)
+    for i in range(padded_seq.size(0)):
+        for j in range(title_lens[i]):
+            charid = np.argmax(padded_seq[i][j].numpy())
+            if padded_seq[i][j][charid] == 1:
                 new_titles[i] += id2char[charid]
     return [''.join(title) for title in new_titles]
 
