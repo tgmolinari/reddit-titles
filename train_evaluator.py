@@ -77,7 +77,7 @@ def train(model, args):
             title_copy = titles.clone()
             chars_tensor = torch.eye(NUM_CHARS)
             for ind in mang_ind:
-                num_chars_title = randint(1+int(title_lens[ind]*.1), title_lens[ind])
+                num_chars_title = randint(1+int(title_lens[ind]*.1), title_lens[ind] - 1)
                 mang_chars = np.random.choice(title_lens[ind] - 1, num_chars_title, replace = False)
                 if randint(0, 1) > 0:
                     # uniformly random character substitution
