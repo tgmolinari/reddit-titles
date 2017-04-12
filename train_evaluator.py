@@ -77,14 +77,15 @@ def train(model, args):
             title_copy = titles.clone()
             chars_tensor = torch.eye(NUM_CHARS)
             for ind in mang_ind:
-                num_chars_title = randint(1+int(title_lens[ind]*.1), title_lens[ind] - 1)
-                mang_chars = np.random.choice(title_lens[ind] - 1, num_chars_title, replace = False)
-                if randint(0, 1) > 0:
-                    # uniformly random character substitution
-                    title_copy[ind][torch.from_numpy(mang_chars)] = chars_tensor[torch.from_numpy(np.random.choice(NUM_CHARS - 1, num_chars_title))]
-                else:
-                    # randomly change characters to other characters within title
-                    title_copy[ind][torch.from_numpy(mang_chars)] = title_copy[ind][torch.from_numpy(np.random.choice(title_lens[ind] - 1, num_chars_title))]
+                if title_lens[ind] > 1:
+                    num_chars_title = randint(1+int(title_lens[ind]*.1), title_lens[ind] - 1)
+                    mang_chars = np.random.choice(title_lens[ind] - 1, num_chars_title, replace = False)
+                    if randint(0, 1) > 0:
+                        # uniformly random character substitution
+                        title_copy[ind][torch.from_numpy(mang_chars)] = chars_tensor[torch.from_numpy(np.random.choice(NUM_CHARS - 1, num_chars_title))]
+                    else:
+                        # randomly change characters to other characters within title
+                        title_copy[ind][torch.from_numpy(mang_chars)] = title_copy[ind][torch.from_numpy(np.random.choice(title_lens[ind] - 1, num_chars_title))]
 
             mang_imgs = images[torch.from_numpy(mang_ind)]
             mang_titles = title_copy[torch.from_numpy(mang_ind)]
