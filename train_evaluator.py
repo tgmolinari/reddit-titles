@@ -61,6 +61,7 @@ def train(model, args):
     for epoch in range(args.epochs):
         if epoch > 0:
             last_epoch_loss = epoch_loss
+            epoch_loss = 0 
         for i, (images, titles, title_lens, score) in enumerate(train_loader):
 
             # swapping random images and post titles
@@ -112,11 +113,11 @@ def train(model, args):
 
             batch_loss.backward()
             optimizer.step()
-            if batch_ctr % 1000 == 0:
+            if batch_ctr % 10000 == 0:
                 pickle.dump(model.state_dict(), open(args.save_name + '.p', 'wb'))
                 
         if epoch > 2: #arbitrary epoch choice 
-            if -.003 < (last_epoch_loss - epoch_loss)/epoch_loss < .003:
+            if (last_epoch_loss - epoch_loss)/epoch_loss < .003:
                 for param in range(len(optimizer.param_groups)):
                     optimizer.param_groups[param]['lr'] = optimizer.param_groups[param]['lr']/2
 
