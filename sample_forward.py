@@ -5,7 +5,7 @@ import time
 import argparse
 import pickle
 from datetime import date
-from random import randint
+from random import randint, shuffle
 
 import torch
 import torch.nn as nn
@@ -31,17 +31,15 @@ MANG_PROP = 0.25
 
 def train(model, args):
     #set up logger
-    timestring = str(date.today()) + '_' + time.strftime("%Hh-%Mm-%Ss", time.localtime(time.time()))
-    run_name = 'score_eval_training' + '_' + timestring
-    configure("logs/" + run_name, flush_secs=5)
-
+    samp_out = open("samp_forward_nt.txt","w")
     posts_json = json.load(open(args.posts_json))
+    shuffle(posts_json)
     # normalizing function to play nicely with the pretrained feature extractor
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
        std=[0.229, 0.224, 0.225])
     # specify the dataloader and dataset generator
     train_loader = data.DataLoader(
-        PostFolder(posts_json, args.img_dir, transform=transforms.Compose([
+        PostFolder(posts_json[:64], args.img_dir, transform=transforms.Compose([
            transforms.RandomHorizontalFlip(),
            transforms.ToTensor(),
            normalize,
@@ -56,7 +54,6 @@ def train(model, args):
     l1_loss = nn.L1Loss()
 
     batch_ctr = 0
-    epoch_loss = 0
     for epoch in range(args.epochs):
         for i, (images, titles, title_lens, score) in enumerate(train_loader):
 
@@ -74,14 +71,15 @@ def train(model, args):
             title_copy = titles.clone()
             chars_tensor = torch.eye(NUM_CHARS)
             for ind in mang_ind:
-                num_chars_title = randint(1+int(title_lens[ind]*.1), title_lens[ind])
-                mang_chars = np.random.choice(title_lens[ind], num_chars_title, replace = False)
-                if randint(0, 1) > 0:
-                    # uniformly random character substitution
-                    title_copy[ind][torch.from_numpy(mang_chars)] = chars_tensor[torch.from_numpy(np.random.choice(NUM_CHARS, num_chars_title))]
-                else:
-                    # randomly change characters to other characters within title
-                    title_copy[ind][torch.from_numpy(mang_chars)] = title_copy[ind][torch.from_numpy(np.random.choice(title_lens[ind], num_chars_title))]
+                if title_lens[ind] > 1:
+                    num_chars_title = randint(1+int(title_lens[ind]*.1), title_lens[ind] - 1)
+                    mang_chars = np.random.choice(title_lens[ind] - 1, num_chars_title, replace = False)
+                    if randint(0, 1) > 0:
+                        # uniformly random character substitution
+                        title_copy[ind][torch.from_numpy(mang_chars)] = chars_tensor[torch.from_numpy(np.random.choice(NUM_CHARS - 1, num_chars_title))]
+                    else:
+                        # randomly change characters to other characters within title
+                        title_copy[ind][torch.from_numpy(mang_chars)] = title_copy[ind][torch.from_numpy(np.random.choice(title_lens[ind] - 1, num_chars_title))]
 
             
            
@@ -97,14 +95,23 @@ def train(model, args):
             title_lens = torch.cat((title_lens, mism_lens, mang_lens), 0)
             score = torch.cat((score.type(torch.FloatTensor), torch.ones(num_mism + num_mang) * -1), 0)
             # turning images into image features
-            images = image_feature_extractor.make_features(Variable(images))
+            images = image_feature_extractor.make_features(Variable(images).type(args.dtype))
 
+            out_titles = titles_from_padded(titles,title_lens)
+            samp_out.write("\n".join(out_titles))
+            samp_out.write("\n")
 
             pred_score = model.forward(images, Variable(titles).type(args.dtype), title_lens)
+            out_out = torch.cat((pred_score.data.cpu(), score), 1)
+            samp_out.write("Predicted, Actual \n")
+            samp_out.write(str(out_out))
+            
+            samp_out.write("\n")
+        samp_out.close()
 
-            optimizer.zero_grad()
+            
 
-            score_var = Variable(score).type(args.dtype)
+            
             
 
 
