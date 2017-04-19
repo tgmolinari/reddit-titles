@@ -54,7 +54,7 @@ def train(model, args):
     learning_rate = 0.001
     optimizer = optim.Adam([{'params': model.title_feat_extractor.parameters()},
             {'params': model.lin1.parameters()}, {'params': model.lin2.parameters()}], lr=learning_rate)
-    l1_loss = nn.L1Loss()
+    l2_loss = nn.MSELoss()
 
     batch_ctr = 0
     epoch_loss = 0
@@ -64,39 +64,6 @@ def train(model, args):
             epoch_loss = 0 
         for i, (images, titles, title_lens, score) in enumerate(train_loader):
 
-            # swapping random images and post titles
-            num_mism = int(titles.size(0) * MISM_PROP)
-            mism_ind = np.random.choice(titles.size(0), num_mism, replace = False)
-            mism_map = (mism_ind + randint(0, titles.size(0) - 1)) % titles.size(0)
-            mism_imgs = images[torch.from_numpy(mism_ind)]
-            mism_titles = titles.clone()[torch.from_numpy(mism_map)]
-            mism_lens = title_lens[torch.from_numpy(mism_map)]
-
-            # mangling titles
-            num_mang = int(titles.size(0) * MANG_PROP)
-            mang_ind = np.random.choice(titles.size(0), num_mang, replace = False) 
-            title_copy = titles.clone()
-            chars_tensor = torch.eye(NUM_CHARS)
-            for ind in mang_ind:
-                if title_lens[ind] > 1:
-                    num_chars_title = randint(1+int(title_lens[ind]*.1), title_lens[ind] - 1)
-                    mang_chars = np.random.choice(title_lens[ind] - 1, num_chars_title, replace = False)
-                    if randint(0, 1) > 0:
-                        # uniformly random character substitution
-                        title_copy[ind][torch.from_numpy(mang_chars)] = chars_tensor[torch.from_numpy(np.random.choice(NUM_CHARS - 1, num_chars_title))]
-                    else:
-                        # randomly change characters to other characters within title
-                        title_copy[ind][torch.from_numpy(mang_chars)] = title_copy[ind][torch.from_numpy(np.random.choice(title_lens[ind] - 1, num_chars_title))]
-
-            mang_imgs = images[torch.from_numpy(mang_ind)]
-            mang_titles = title_copy[torch.from_numpy(mang_ind)]
-            mang_lens = title_lens[torch.from_numpy(mang_ind)]
-
-            images = torch.cat((images, mism_imgs, mang_imgs), 0)
-            titles = torch.cat((titles, mism_titles, mang_titles), 0)
-            title_lens = torch.cat((title_lens, mism_lens, mang_lens), 0)
-            score = torch.cat((score.type(torch.FloatTensor), torch.ones(num_mism + num_mang) * -1), 0)
-
             images = image_feature_extractor.make_features(Variable(images).type(args.dtype))
 
 
@@ -105,7 +72,8 @@ def train(model, args):
             optimizer.zero_grad()
 
             score_var = Variable(score).type(args.dtype)
-            batch_loss = l1_loss(pred_score, score_var)
+            batch_loss = l2_loss(pred_score, score_var)
+            print(batch_loss.data[0])
             log_value('L1 log score loss', batch_loss.data[0], batch_ctr)
             log_value('Learning rate', optimizer.param_groups[0]['lr'], batch_ctr)
             epoch_loss += batch_loss.data[0]
