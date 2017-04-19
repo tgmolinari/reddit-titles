@@ -15,6 +15,7 @@ class ImageDiscriminator(torch.nn.Module):
         super(ImageDiscriminator, self).__init__()
 
         self.dtype = dtype
+
         self.title_feat_extractor = nn.GRU(num_chars, 512,)
         self.attn_lin1 = nn.Linear(4096, 512)
         self.attn_conv1 = nn.Conv1d(2,1,1)
@@ -42,10 +43,10 @@ class ImageDiscriminator(torch.nn.Module):
         for batch in range(title_feat.size(1)):
             trimmed_feat[batch] = title_feat[lens[batch] - 1][batch]
         images = self.attn_lin1(images)
-        features = torch.cat((trimmed_feat, images), 0)
-        print(features.size())
+        features = torch.cat((trimmed_feat.unsqueeze(1), images.unsqueeze(1)), 1)
         x = self.attn_conv1(features)
-        x = F.leaky_relu(self.lin1(x))
+        x = self.lin1(x.squeeze(1))
+        x = F.leaky_relu(x)
         x = self.lin2(x)
         return x[torch.from_numpy(np.argsort(sorted_idx)).cuda()] 
 

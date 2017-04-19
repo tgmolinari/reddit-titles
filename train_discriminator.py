@@ -23,13 +23,13 @@ DATASET_SIZE = 682440
 NUM_CHARS = 53
 
 # proportion of batch to copy and swap images and titles (MISM_PROP) or mangle titles (MANG_PROP)
-MISM_PROP = 0.25
-MANG_PROP = 0.25
+MISM_PROP = 1.0
+MANG_PROP = 0.125
 
 def train(model, args):
     #set up logger
     timestring = str(date.today()) + '_' + time.strftime("%Hh-%Mm-%Ss", time.localtime(time.time()))
-    run_name = 'score_discrim_training' + '_' + timestring
+    run_name = 'bce_discrim_training_r1' + '_' + timestring
     configure("logs/" + run_name, flush_secs=5)
 
     posts_json = json.load(open(args.posts_json))
@@ -51,6 +51,9 @@ def train(model, args):
     learning_rate = 0.001
     optimizer = optim.Adam([{'params': model.title_feat_extractor.parameters()},
             {'params': model.lin1.parameters()}, {'params': model.lin2.parameters()}], lr=learning_rate)
+    # Correctly paired title and image is labeled as 1
+    # Mangled titles and mismatched titles are labeled as 0
+
     bce_loss = nn.BCELoss()
 
     batch_ctr = 0
@@ -92,7 +95,7 @@ def train(model, args):
             images = torch.cat((images, mism_imgs, mang_imgs), 0)
             titles = torch.cat((titles, mism_titles, mang_titles), 0)
             title_lens = torch.cat((title_lens, mism_lens, mang_lens), 0)
-            score = torch.cat((score.type(torch.FloatTensor), torch.ones(num_mism) * -1), 0)
+            score = torch.cat((score.type(torch.FloatTensor), torch.zeros(num_mism), torch.zeros(num_mang)), 0)
 
             images = image_feature_extractor.make_features(Variable(images).type(args.dtype))
 
@@ -103,8 +106,11 @@ def train(model, args):
 
             score_var = Variable(score).type(args.dtype)
             batch_loss = bce_loss(pred_score, score_var)
-            log_value('BCE loss', batch_loss.data[0], batch_ctr)
             
+            log_value('BCE loss', batch_loss.data[0], batch_ctr)
+            log_value('Learning rate', optimizer.param_groups[0]['lr'], batch_ctr)
+
+
             epoch_loss += batch_loss.data[0]
             batch_ctr += 1
 
@@ -117,10 +123,10 @@ def train(model, args):
             if (last_epoch_loss - epoch_loss)/epoch_loss < .003:
                 for param in range(len(optimizer.param_groups)):
                     optimizer.param_groups[param]['lr'] = optimizer.param_groups[param]['lr']/2
-            log_value('Learning rate', optimizer.param_groups[0]['lr'], epoch)        
+                    
 
 
-parser = argparse.ArgumentParser(description='Evaluator Train')
+parser = argparse.ArgumentParser(description='Discriminator Train')
 parser.add_argument('--batch-size', type=int, default=32,
     help='batch size (default: 32)')
 parser.add_argument('--img-dir', type=str,
