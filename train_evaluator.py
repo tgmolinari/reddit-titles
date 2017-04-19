@@ -22,10 +22,6 @@ from tensorboard_logger import configure, log_value
 DATASET_SIZE = 682440
 NUM_CHARS = 53
 
-# proportion of batch to copy and swap images and titles (MISM_PROP) or mangle titles (MANG_PROP)
-MISM_PROP = 0.25
-MANG_PROP = 0.25
-
 # train will pull in the model, expected model is ScorePredictor
 # ScorePredictor will contain the feature extractor net from evaluator_net.py
 
@@ -47,7 +43,7 @@ def train(model, args):
            normalize,
            ])),
        batch_size=args.batch_size, shuffle=True,
-       num_workers=8, pin_memory=True)
+       num_workers=4, pin_memory=True)
 
     image_feature_extractor = FeatureExtractor(args.dtype)
     
@@ -73,9 +69,9 @@ def train(model, args):
 
             score_var = Variable(score).type(args.dtype)
             batch_loss = l2_loss(pred_score, score_var)
-            print(batch_loss.data[0])
-            log_value('L1 log score loss', batch_loss.data[0], batch_ctr)
-            log_value('Learning rate', optimizer.param_groups[0]['lr'], batch_ctr)
+            if batch_ctr >= 100:
+                log_value('L2 transformed score loss', batch_loss.data[0], batch_ctr)
+                log_value('Learning rate', optimizer.param_groups[0]['lr'], batch_ctr)
             epoch_loss += batch_loss.data[0]
             batch_ctr += 1
 
@@ -98,7 +94,7 @@ parser.add_argument('--img-dir', type=str,
     help='image directory')
 parser.add_argument('--posts-json', type=str,
     help='path to json with reddit posts')
-parser.add_argument('--save-name', type=str,
+parser.add_argument('--save-name', type=str, default='reddit_evaluator_net',
     help='file name to save model params dict')
 parser.add_argument('--load-name', type=str,
     help='file name to load model params dict')
