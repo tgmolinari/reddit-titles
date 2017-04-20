@@ -21,7 +21,7 @@ def make_dataset(posts_json : list, img_dir, file_ext):
     posts_list = []
     for post in posts_json:
         path = os.path.join(img_dir, post['id'] + file_ext)
-        score = 1.25 * (1.0/(1+ np.exp(-0.5*( post['score'] - 2.5))) - 0.2)
+        score = 1.0/(1 + np.exp(-2*(post['score'] - 2.5)))
         item = (path, post['title'], score)
         posts_list.append(item)
     return posts_list

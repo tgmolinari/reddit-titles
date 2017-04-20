@@ -16,8 +16,9 @@ class ScorePredictor(torch.nn.Module):
 
         self.dtype = dtype
         self.title_feat_extractor = nn.GRU(num_chars, 512,)
-        self.lin1 = nn.Linear(4096 + 512, 256)
-        self.lin2 = nn.Linear(256, 1)
+        self.lin1 = nn.Linear(4096 + 512, 512)
+        self.lin2 = nn.Linear(512, 256)
+        self.lin3 = nn.Linear(256, 1)
 
         self.type(dtype)
 
@@ -42,7 +43,8 @@ class ScorePredictor(torch.nn.Module):
         
         features = torch.cat((trimmed_feat, images), 1)
         x = F.leaky_relu(self.lin1(features))
-        x = F.sigmoid(self.lin2(x))
+        x = F.leaky_relu(self.lin2(x))
+        x = self.lin3(x)
         return x[torch.from_numpy(np.argsort(sorted_idx)).cuda()] # TODO: this too 
 
     def init_hidden(self, bsz):

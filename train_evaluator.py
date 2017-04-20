@@ -28,7 +28,7 @@ NUM_CHARS = 53
 def train(model, args):
     #set up logger
     timestring = str(date.today()) + '_' + time.strftime("%Hh-%Mm-%Ss", time.localtime(time.time()))
-    run_name = 'score_eval_training' + '_' + timestring
+    run_name = args.save_name + '_' + timestring
     configure("logs/" + run_name, flush_secs=5)
 
     posts_json = json.load(open(args.posts_json))
@@ -49,7 +49,7 @@ def train(model, args):
     
     learning_rate = 0.001
     optimizer = optim.Adam([{'params': model.title_feat_extractor.parameters()},
-            {'params': model.lin1.parameters()}, {'params': model.lin2.parameters()}], lr=learning_rate)
+            {'params': model.lin1.parameters()}, {'params': model.lin2.parameters()}, {'params': model.lin3.parameters()}], lr=learning_rate)
     l2_loss = nn.MSELoss()
 
     batch_ctr = 0
@@ -61,7 +61,6 @@ def train(model, args):
         for i, (images, titles, title_lens, score) in enumerate(train_loader):
 
             images = image_feature_extractor.make_features(Variable(images).type(args.dtype))
-
 
             pred_score = model.forward(images, Variable(titles).type(args.dtype), title_lens)
 
@@ -80,7 +79,7 @@ def train(model, args):
             if batch_ctr % 10000 == 0:
                 pickle.dump(model.state_dict(), open(args.save_name + '.p', 'wb'))
                 
-        if epoch > 2: #arbitrary epoch choice 
+        if epoch >= 0: #arbitrary epoch choice 
             if (last_epoch_loss - epoch_loss)/epoch_loss < .003:
                 for param in range(len(optimizer.param_groups)):
                     optimizer.param_groups[param]['lr'] = optimizer.param_groups[param]['lr']/2
