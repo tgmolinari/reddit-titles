@@ -11,12 +11,12 @@ from torch.nn.utils.rnn import pack_padded_sequence
 from torch.autograd import Variable
 
 class ImageDiscriminator(torch.nn.Module):
-    def __init__(self, dtype, num_chars):
+    def __init__(self, dtype, num_dims):
         super(ImageDiscriminator, self).__init__()
 
         self.dtype = dtype
 
-        self.title_feat_extractor = nn.GRU(num_chars, 512,)
+        self.title_feat_extractor = nn.GRU(num_dims, 512,)
         self.attn_lin1 = nn.Linear(4096, 512)
         self.attn_conv1 = nn.Conv1d(2,1,1)
         self.lin1 = nn.Linear(512, 256)
@@ -42,6 +42,7 @@ class ImageDiscriminator(torch.nn.Module):
         trimmed_feat = Variable(torch.FloatTensor(title_feat.size(1), title_feat.size(2))).type(self.dtype)
         for batch in range(title_feat.size(1)):
             trimmed_feat[batch] = title_feat[lens[batch] - 1][batch]
+            
         images = self.attn_lin1(images)
         features = torch.cat((trimmed_feat.unsqueeze(1), images.unsqueeze(1)), 1)
         x = self.attn_conv1(features)

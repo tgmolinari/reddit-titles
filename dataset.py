@@ -1,15 +1,17 @@
 import os
 import json
+import re
+import pickle
+import nltk
 import numpy as np
 import torch
 import torch.utils.data as data
 from PIL import Image
 
-# Our predefined char2id and maximum title length
-max_len = 400
-NULL_TERM = '`'
-char2id = {'p': 17, '%': 49, 'b': 22, '!': 32, '?': 33, 'e': 14, 'f': 20, '0': 41, 'o': 11, 's': 8, 'w': 18, 'g': 23, ':': 34, 'k': 5, '7': 46, '8': 28, 'a': 9, 'r': 15, '5': 35, '-': 38, "'": 6, 'z': 36, '*': 51, 'd': 13, 'v': 16, 'i': 0, '/': 44, '#': 48, '&': 37, 'h': 3, '9': 45, 'm': 19, '3': 40, 't': 2, '.': 26, '_': 50, ' ': 1, 'y': 10, 'c': 21, '4': 31, 'n': 4, '6': 47, 'l': 7, '"': 42, '$': 43, 'q': 39, 'j': 24, 'x': 29, 'u': 12, '1': 27, ',': 25, '2': 30, NULL_TERM: 52}
-id2char = {0: 'i', 1: ' ', 2: 't', 3: 'h', 4: 'n', 5: 'k', 6: "'", 7: 'l', 8: 's', 9: 'a', 10: 'y', 11: 'o', 12: 'u', 13: 'd', 14: 'e', 15: 'r', 16: 'v', 17: 'p', 18: 'w', 19: 'm', 20: 'f', 21: 'c', 22: 'b', 23: 'g', 24: 'j', 25: ',', 26: '.', 27: '1', 28: '8', 29: 'x', 30: '2', 31: '4', 32: '!', 33: '?', 34: ':', 35: '5', 36: 'z', 37: '&', 38: '-', 39: 'q', 40: '3', 41: '0', 42: '"', 43: '$', 44: '/', 45: '9', 46: '7', 47: '6', 48: '#', 49: '%', 50: '_', 51: '*', 52: NULL_TERM}
+# maximum title length in words
+max_len = 100
+embedding_dims = 50
+glove_vectors = pickle.load(open('../glove_vectors_50d.p', 'rb'))
 
 def default_loader(path):
     return Image.open(path).convert('RGB')
@@ -27,11 +29,23 @@ def make_dataset(posts_json : list, img_dir, file_ext):
     return posts_list
        
 def default_title_transform(title):
-    title_len = len(title)
-    transformed_title = torch.zeros((max_len, len(char2id)))
-    for i,char in enumerate(title):
-        transformed_title[i, char2id[char]] = 1
-    return transformed_title, title_len
+    tokens = nltk.word_tokenize(title)
+    # join <URL> like tokens again
+    title = []
+    while len(tokens) > 0:
+        if tokens[0] == '<' and tokens[2] == '>':
+            title.append(tokens.pop(0) + tokens.pop(0) + tokens.pop(0))
+        else:
+            title.append(tokens.pop(0))
+    # look up GloVe vectors for each token
+    transformed_title = torch.zeros((max_len, embedding_dims))
+    i = 0
+    while len(title) > 0:
+        word = title.pop(0)
+        if word in glove_vectors:
+            transformed_title[i] = glove_vectors[word].clone()
+            i += 1
+    return transformed_title, max(i, 1)
 
 def titles_from_padded(padded_seq, title_lens):
     new_titles = [''] * padded_seq.size(0)
@@ -58,7 +72,7 @@ class PostFolder(data.Dataset):
         img = self.loader(path)
         if self.transform is not None:
             img = self.transform(img)
-        title, title_len = self.title_transform(title + NULL_TERM)
+        title, title_len = self.title_transform(title)
         return img, title, title_len, score
 
     def __len__(self):
