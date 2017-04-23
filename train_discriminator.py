@@ -50,8 +50,8 @@ def train(model, args):
     
     learning_rate = 0.001
     optimizer = optim.Adam([{'params': model.title_feat_extractor.parameters()},
-            {'params': model.lin1.parameters()}, {'params': model.lin2.parameters()}], 
-            {'params': model.attn_lin1.parameters()}, {'params': model.attn_conv1.parameters()},
+            {'params': model.lin1.parameters()}, {'params': model.lin2.parameters()}, 
+            {'params': model.attn_lin1.parameters()}, {'params': model.attn_conv1.parameters()}],
             lr=learning_rate)
     # Correctly paired title and image is labeled as 1
     # Mangled titles and mismatched titles are labeled as 0
