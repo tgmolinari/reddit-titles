@@ -19,7 +19,7 @@ from dataset import PostFolder
 from dataset import titles_from_padded
 from tensorboard_logger import configure, log_value
 
-DATASET_SIZE = 682440
+DATASET_SIZE = 681572
 NUM_DIMS = 50
 
 # proportion of batch to copy and swap images and titles (MISM_PROP) or mangle titles (MANG_PROP)
@@ -29,10 +29,11 @@ MANG_PROP = 0.5
 def train(model, args):
     #set up logger
     timestring = str(date.today()) + '_' + time.strftime("%Hh-%Mm-%Ss", time.localtime(time.time()))
-    run_name = 'bce_discrim_training_r1' + '_' + timestring
+    run_name = 'embedd_discrim_training_r1' + '_' + timestring
     configure("logs/" + run_name, flush_secs=5)
 
     posts_json = json.load(open(args.posts_json, 'r', encoding='utf-8', errors='replace'))
+    print(len(posts_json))
     # normalizing function to play nicely with the pretrained feature extractor
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
        std=[0.229, 0.224, 0.225])
