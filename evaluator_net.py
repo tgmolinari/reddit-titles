@@ -11,11 +11,11 @@ from torch.nn.utils.rnn import pack_padded_sequence
 from torch.autograd import Variable
 
 class ScorePredictor(torch.nn.Module):
-    def __init__(self, dtype, num_chars):
+    def __init__(self, dtype, num_dims):
         super(ScorePredictor, self).__init__()
 
         self.dtype = dtype
-        self.title_feat_extractor = nn.GRU(num_chars, 512,)
+        self.title_feat_extractor = nn.GRU(num_dims, 512,)
         self.lin1 = nn.Linear(4096 + 512, 512)
         self.lin2 = nn.Linear(512, 256)
         self.lin3 = nn.Linear(256, 1)
