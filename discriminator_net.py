@@ -26,16 +26,9 @@ class ImageDiscriminator(torch.nn.Module):
 
     def forward(self, images, titles, title_lens):
 
-        # because torch doesn't have an argsort, we use numpy's
-        sorted_idx = np.array(np.argsort(title_lens.numpy())[::-1])
-        sorted_title_lens = title_lens.numpy()[sorted_idx]
-        images = images[torch.from_numpy(sorted_idx).cuda()] 
-        titles = titles[torch.from_numpy(sorted_idx).cuda()]
-        packed_seq = pack_padded_sequence(titles, sorted_title_lens, batch_first = True)
-
         self.init_hidden(images.size(0))
        
-        title_feat, _ = self.title_feat_extractor(packed_seq, self.h0)
+        title_feat, _ = self.title_feat_extractor(titles, self.h0)
         title_feat, lens = pad_packed_sequence(title_feat)
         
         # extracting only last output of GRU
@@ -50,7 +43,7 @@ class ImageDiscriminator(torch.nn.Module):
         x = F.leaky_relu(x)
         x = self.lin2(x)
         x = F.sigmoid(x)
-        return x[torch.from_numpy(np.argsort(sorted_idx)).cuda()] 
+        return x 
 
     def init_hidden(self, bsz):
         self.h0 = Variable(torch.zeros(1, bsz, 512).type(self.dtype))
