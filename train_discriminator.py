@@ -19,20 +19,21 @@ from dataset import PostFolder
 from dataset import titles_from_padded
 from tensorboard_logger import configure, log_value
 
-DATASET_SIZE = 682440
-NUM_CHARS = 53
+DATASET_SIZE = 681572
+NUM_DIMS = 50
 
 # proportion of batch to copy and swap images and titles (MISM_PROP) or mangle titles (MANG_PROP)
-MISM_PROP = 1.0
-MANG_PROP = 0.125
+MISM_PROP = 0.5
+MANG_PROP = 0.5
 
 def train(model, args):
     #set up logger
     timestring = str(date.today()) + '_' + time.strftime("%Hh-%Mm-%Ss", time.localtime(time.time()))
-    run_name = 'bce_discrim_training_r1' + '_' + timestring
+    run_name = 'embedd_discrim_training_r1' + '_' + timestring
     configure("logs/" + run_name, flush_secs=5)
 
-    posts_json = json.load(open(args.posts_json))
+    posts_json = json.load(open(args.posts_json, 'r', encoding='utf-8', errors='replace'))
+    print(len(posts_json))
     # normalizing function to play nicely with the pretrained feature extractor
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
        std=[0.229, 0.224, 0.225])
@@ -44,7 +45,7 @@ def train(model, args):
            normalize,
            ])),
        batch_size=args.batch_size, shuffle=True,
-       num_workers=8, pin_memory=True)
+       num_workers=4, pin_memory=True)
 
     image_feature_extractor = FeatureExtractor(args.dtype)
     
@@ -69,6 +70,7 @@ def train(model, args):
             # swapping random images and post titles
             num_mism = int(titles.size(0) * MISM_PROP)
             mism_ind = np.random.choice(titles.size(0), num_mism, replace = False)
+            # shifting indices by same amount so that a mismatch is ensured
             mism_map = (mism_ind + randint(0, titles.size(0) - 1)) % titles.size(0)
             mism_imgs = images[torch.from_numpy(mism_ind)]
             mism_titles = titles.clone()[torch.from_numpy(mism_map)]
@@ -78,17 +80,19 @@ def train(model, args):
             num_mang = int(titles.size(0) * MANG_PROP)
             mang_ind = np.random.choice(titles.size(0), num_mang, replace = False) 
             title_copy = titles.clone()
-            chars_tensor = torch.eye(NUM_CHARS)
+            num_noise = 100
+            noise_tensor = torch.randn(num_noise, NUM_DIMS) * 2
             for ind in mang_ind:
                 if title_lens[ind] > 1:
-                    num_chars_title = randint(1+int(title_lens[ind]*.1), title_lens[ind] - 1)
-                    mang_chars = np.random.choice(title_lens[ind] - 1, num_chars_title, replace = False)
-                    if randint(0, 1) > 0:
-                        # uniformly random character substitution
-                        title_copy[ind][torch.from_numpy(mang_chars)] = chars_tensor[torch.from_numpy(np.random.choice(NUM_CHARS - 1, num_chars_title))]
-                    else:
-                        # randomly change characters to other characters within title
-                        title_copy[ind][torch.from_numpy(mang_chars)] = title_copy[ind][torch.from_numpy(np.random.choice(title_lens[ind] - 1, num_chars_title))]
+                    num_words_mang = randint(int(np.ceil(title_lens[ind]*.5)), title_lens[ind] - 1)
+                    mang_words = np.random.choice(title_lens[ind] - 1, num_words_mang, replace = False)
+                    # if randint(0, 1) > 0:
+                        # set mangled word to random noise vector
+                    # title_copy[ind][torch.from_numpy(mang_words)] = noise_tensor[torch.from_numpy(np.random.choice(num_noise - 1, num_words_mang))]
+                    title_copy[ind][torch.from_numpy(mang_words)] = torch.randn(num_words_mang, NUM_DIMS) * 2
+                    # else:
+                        # randomly change words to other words within title
+                        # title_copy[ind][torch.from_numpy(mang_words)] = title_copy[ind][torch.from_numpy(np.random.choice(title_lens[ind] - 1, num_words_mang))]
 
             mang_imgs = images[torch.from_numpy(mang_ind)]
             mang_titles = title_copy[torch.from_numpy(mang_ind)]
@@ -148,7 +152,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.dtype = torch.cuda.FloatTensor if torch.cuda.is_available() and args.gpu else torch.FloatTensor
 
-    model = ImageDiscriminator(args.dtype, NUM_CHARS)
+    model = ImageDiscriminator(args.dtype, NUM_DIMS)
     if args.load_name is not None:
         model.load_state_dict(pickle.load(open(args.load_name + '.p', 'rb')))
 

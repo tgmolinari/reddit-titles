@@ -12,24 +12,19 @@ import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
 from torch.autograd import Variable
-from evaluator_net import ScorePredictor
+from discriminator_net import ImageDiscriminator
 from generator_net import TitleGenerator
 from feat_extractor import FeatureExtractor
-from dataset import ImageFolder
+from dataset import PostFolder
 from dataset import titles_from_padded
 from tensorboard_logger import configure, log_value
 
 DATASET_SIZE = 682440
-NUM_CHARS = 53
+NUM_DIMS = 50
 
-# proportion of batch to copy and swap images and titles (MISM_PROP) or mangle titles (MANG_PROP)
-MISM_PROP = 0.25
-MANG_PROP = 0.25
+# train will pull in the model, expected model is ImageDiscriminator
 
-# train will pull in the model, expected model is ScorePredictor
-# ScorePredictor will contain the feature extractor net from evaluator_net.py
-
-def train(generator, evaluator, args):
+def train(generator, discriminator, args):
     #set up logger
     timestring = str(date.today()) + '_' + time.strftime("%Hh-%Mm-%Ss", time.localtime(time.time()))
     run_name = 'generator_training' + '_' + timestring
@@ -41,7 +36,7 @@ def train(generator, evaluator, args):
        std=[0.229, 0.224, 0.225])
     # specify the dataloader and dataset generator
     train_loader = data.DataLoader(
-        ImageFolder(posts_json, args.img_dir, transform=transforms.Compose([
+        PostFolder(posts_json, args.img_dir, transform=transforms.Compose([
            transforms.RandomHorizontalFlip(),
            transforms.ToTensor(),
            normalize,
@@ -52,40 +47,56 @@ def train(generator, evaluator, args):
     image_feature_extractor = FeatureExtractor(args.dtype)
     
     learning_rate = 0.001
-    optimizer = optim.Adam(generator.parameters(), lr=learning_rate)
-    l1_loss = nn.L1Loss()
+    gen_optimizer = optim.Adam(generator.parameters(), lr=learning_rate)
+    disc_optimizer = optim.Adam(discriminator.parameters(), lr=learning_rate)
+    bce = nn.BCELoss()
 
     batch_ctr = 0
     epoch_loss = 0
     for epoch in range(args.epochs):
         if epoch > 0:
             last_epoch_loss = epoch_loss
-        for i, images in enumerate(train_loader):
+        for i, (images, titles, title_lens, score) in enumerate(train_loader):
+            bsz = images.size(0)
+            zero_score = Variable(torch.zeros(bsz)).type(args.dtype)
+            ones_score = Variable(torch.ones(bsz)).type(args.dtype)
 
             image_feats = image_feature_extractor.make_features(Variable(images).type(args.dtype))
-            titles, title_lens = generator(image_feats)
 
-            pred_score = evaluator.forward(image_feats, titles, title_lens)
-            optimizer.zero_grad()
-
-            batch_loss = -1 * torch.mean(pred_score)
-            log_value('Predicted score', torch.mean(pred_score.data), batch_ctr)
-            log_value('Learning rate', optimizer.param_groups[0]['lr'], batch_ctr)
-
-            batch_loss.backward()
-            optimizer.step()
+            # Train discriminator on real and generated titles
+            disc_optimizer.zero_grad()
             
-            epoch_loss += batch_loss.data[0]
+            real_pred = discriminator(image_feats, Variable(titles).type(args.dtype))
+            disc_real_loss = bce(real_pred, ones_score)
+            disc_real_loss.backward()
+            
+            gen_titles = generator(image_feats)
+            gen_pred = discriminator(image_feats, gen_titles.detach())
+            disc_gen_loss = bce(gen_pred, zero_score)
+            disc_gen_loss.backward()
+
+            disc_optimizer.step()
+
+            # Train generator on loss of discriminator for generated titles
+            gen_optimizer.zero_grad()
+            gen_pred = discriminator(image_feats, gen_titles)
+            gen_loss = bce(gen_pred, ones_score)
+            gen_loss.backward()
+            gen_optimizer.step()
+            
+            log_value('Discriminator BCE loss (real)', disc_real_loss.data[0], batch_ctr)
+            log_value('Discriminator BCE loss (generated)', disc_gen_loss.data[0], batch_ctr)
+            log_value('Generator BCE loss', gen_loss.data[0], batch_ctr)
+
+            
             batch_ctr += 1
             
             if batch_ctr % 1000 == 0:
-                pickle.dump(generator.state_dict(), open(args.save_name + '.p', 'wb'))
-        
-        if epoch > 2: #arbitrary epoch choice 
-            if -.003 < (last_epoch_loss - epoch_loss)/epoch_loss < .003:
-                for param in range(len(optimizer.param_groups)):
-                    optimizer.param_groups[param]['lr'] = optimizer.param_groups[param]['lr']/2
+                pickle.dump(generator.state_dict(), open(args.gen_save_name + '.p', 'wb'))
 
+            if batch_ctr % 1000 == 0:
+                pickle.dump(discriminator.state_dict(), open(args.disc_save_name + '.p', 'wb'))
+        
 
 
 parser = argparse.ArgumentParser(description='Evaluator Train')
@@ -95,9 +106,13 @@ parser.add_argument('--img-dir', type=str,
     help='image directory')
 parser.add_argument('--posts-json', type=str,
     help='path to json with reddit posts')
-parser.add_argument('--save-name', type=str,
+parser.add_argument('--gen-save-name', type=str,
     help='file name to save model params dict')
-parser.add_argument('--load-name', type=str,
+parser.add_argument('--disc-save-name', type=str,
+    help='file name to save model params dict')
+parser.add_argument('--gen-load-name', type=str,
+    help='file name to load model params dict')
+parser.add_argument('--disc-load-name', type=str,
     help='file name to load model params dict')
 parser.add_argument('--gpu', action="store_true",
     help='attempt to use gpu')
@@ -108,10 +123,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.dtype = torch.cuda.FloatTensor if torch.cuda.is_available() and args.gpu else torch.FloatTensor
 
-    evaluator = ScorePredictor(args.dtype, NUM_CHARS)
-    if args.load_name is not None:
-        evaluator.load_state_dict(pickle.load(open(args.load_name + '.p', 'rb')))
+    discriminator = ImageDiscriminator(args.dtype, NUM_DIMS)
+    if args.disc_load_name is not None:
+        discriminator.load_state_dict(pickle.load(open(args.disc_load_name + '.p', 'rb')))
 
-    generator = TitleGenerator(args.dtype, NUM_CHARS)
+    generator = TitleGenerator(args.dtype, NUM_DIMS)
+    if args.gen_load_name is not None:
+        discriminator.load_state_dict(pickle.load(open(args.gen_load_name + '.p', 'rb')))
 
-    train(generator, evaluator, args)
+    train(generator, discriminator, args)

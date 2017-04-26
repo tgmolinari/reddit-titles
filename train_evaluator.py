@@ -20,7 +20,7 @@ from dataset import titles_from_padded
 from tensorboard_logger import configure, log_value
 
 DATASET_SIZE = 682440
-NUM_CHARS = 53
+NUM_DIMS = 50
 
 # train will pull in the model, expected model is ScorePredictor
 # ScorePredictor will contain the feature extractor net from evaluator_net.py
@@ -77,12 +77,13 @@ def train(model, args):
             batch_loss.backward()
             optimizer.step()
             if batch_ctr % 10000 == 0:
-                pickle.dump(model.state_dict(), open(args.save_name + '.p', 'wb'))
+                pickle.dump(model.state_dict(), open('models/' + args.save_name + '.p', 'wb'))
                 
-        if epoch >= 0: #arbitrary epoch choice 
-            if (last_epoch_loss - epoch_loss)/epoch_loss < .003:
+        if epoch > 0: #arbitrary epoch choice 
+            if (last_epoch_loss - epoch_loss)/epoch_loss < .01:
                 for param in range(len(optimizer.param_groups)):
                     optimizer.param_groups[param]['lr'] = optimizer.param_groups[param]['lr']/2
+        print('Finished epoch ' + str(epoch + 1))
 
 
 
@@ -106,7 +107,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.dtype = torch.cuda.FloatTensor if torch.cuda.is_available() and args.gpu else torch.FloatTensor
 
-    model = ScorePredictor(args.dtype, NUM_CHARS)
+    model = ScorePredictor(args.dtype, NUM_DIMS)
     if args.load_name is not None:
         model.load_state_dict(pickle.load(open(args.load_name + '.p', 'rb')))
 
