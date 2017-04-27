@@ -91,10 +91,10 @@ def train(generator, discriminator, args):
             
             batch_ctr += 1
             
-            if batch_ctr % 1000 == 0:
+            if batch_ctr % 10000 == 0:
                 pickle.dump(generator.state_dict(), open(args.gen_save_name + '.p', 'wb'))
 
-            if batch_ctr % 1000 == 0:
+            if batch_ctr % 10000 == 0:
                 pickle.dump(discriminator.state_dict(), open(args.disc_save_name + '.p', 'wb'))
         
 
@@ -129,6 +129,6 @@ if __name__ == '__main__':
 
     generator = TitleGenerator(args.dtype, NUM_DIMS)
     if args.gen_load_name is not None:
-        discriminator.load_state_dict(pickle.load(open(args.gen_load_name + '.p', 'rb')))
+        generator.load_state_dict(pickle.load(open(args.gen_load_name + '.p', 'rb')))
 
     train(generator, discriminator, args)
