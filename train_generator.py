@@ -27,7 +27,7 @@ NUM_DIMS = 50
 def train(generator, discriminator, args):
     #set up logger
     timestring = str(date.today()) + '_' + time.strftime("%Hh-%Mm-%Ss", time.localtime(time.time()))
-    run_name = 'generator_training' + '_' + timestring
+    run_name = args.gen_save_name + '_' + timestring
     configure("logs/" + run_name, flush_secs=5)
 
     posts_json = json.load(open(args.posts_json))
@@ -42,14 +42,13 @@ def train(generator, discriminator, args):
            normalize,
            ])),
        batch_size=args.batch_size, shuffle=True,
-       num_workers=8, pin_memory=True)
+       num_workers=4, pin_memory=True)
 
     image_feature_extractor = FeatureExtractor(args.dtype)
     
-    learning_rate = 0.001
+    learning_rate = 0.0001
     gen_optimizer = optim.Adam(generator.parameters(), lr=learning_rate)
     disc_optimizer = optim.Adam(discriminator.parameters(), lr=learning_rate)
-    bce = nn.BCELoss()
 
     batch_ctr = 0
     epoch_loss = 0
@@ -57,9 +56,10 @@ def train(generator, discriminator, args):
         if epoch > 0:
             last_epoch_loss = epoch_loss
         for i, (images, titles, title_lens, score) in enumerate(train_loader):
-            bsz = images.size(0)
-            zero_score = Variable(torch.zeros(bsz)).type(args.dtype)
-            ones_score = Variable(torch.ones(bsz)).type(args.dtype)
+            print(batch_ctr)
+            for p in discriminator.parameters():
+                p.data.clamp_(-0.01, 0.01)
+
 
             image_feats = image_feature_extractor.make_features(Variable(images).type(args.dtype))
 
@@ -67,30 +67,34 @@ def train(generator, discriminator, args):
             disc_optimizer.zero_grad()
             
             real_pred = discriminator(image_feats, Variable(titles).type(args.dtype))
-            disc_real_loss = bce(real_pred, ones_score)
-            disc_real_loss.backward()
-            
-            gen_titles = generator(image_feats)
-            gen_pred = discriminator(image_feats, gen_titles.detach())
-            disc_gen_loss = bce(gen_pred, zero_score)
-            disc_gen_loss.backward()
+            gen_titles = generator(Variable(image_feats.data, volatile = True))
+            gen_pred = discriminator(image_feats, Variable(gen_titles.data))
+            disc_loss = -torch.mean(real_pred - gen_pred)
+            disc_loss.backward()
 
             disc_optimizer.step()
 
-            # Train generator on loss of discriminator for generated titles
-            gen_optimizer.zero_grad()
-            gen_pred = discriminator(image_feats, gen_titles)
-            gen_loss = bce(gen_pred, ones_score)
-            gen_loss.backward()
-            gen_optimizer.step()
+            log_value('WGAN Discriminator loss', disc_loss.data[0], batch_ctr)
+            log_value('WGAN Discriminator loss (real)', torch.mean(real_pred.data), batch_ctr)
+            log_value('WGAN Discriminator loss (generated)', -torch.mean(gen_pred.data), batch_ctr)
             
-            log_value('Discriminator BCE loss (real)', disc_real_loss.data[0], batch_ctr)
-            log_value('Discriminator BCE loss (generated)', disc_gen_loss.data[0], batch_ctr)
-            log_value('Generator BCE loss', gen_loss.data[0], batch_ctr)
 
+            if batch_ctr % 5 == 0:
+                # Train generator on loss of discriminator for generated titles
+            
+                # This causes .backward() to segfault?!??
+                # for p in discriminator.parameters():
+                #     p.requires_grad = False
+
+                gen_optimizer.zero_grad()
+                gen_titles = generator(image_feats)
+                gen_pred = discriminator(image_feats, gen_titles)
+                gen_loss = -torch.mean(gen_pred)
+                gen_loss.backward()
+                gen_optimizer.step()
+                log_value('WGAN Generator loss', gen_loss.data[0], batch_ctr)
             
             batch_ctr += 1
-            
             if batch_ctr % 1000 == 0:
                 pickle.dump(generator.state_dict(), open(args.gen_save_name + '.p', 'wb'))
 
@@ -122,7 +126,6 @@ parser.add_argument('--epochs', type=int, default=9999999999999,
 if __name__ == '__main__':
     args = parser.parse_args()
     args.dtype = torch.cuda.FloatTensor if torch.cuda.is_available() and args.gpu else torch.FloatTensor
-
     discriminator = ImageDiscriminator(args.dtype, NUM_DIMS)
     if args.disc_load_name is not None:
         discriminator.load_state_dict(pickle.load(open(args.disc_load_name + '.p', 'rb')))

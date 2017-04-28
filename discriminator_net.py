@@ -39,7 +39,6 @@ class ImageDiscriminator(torch.nn.Module):
         x = self.lin1(x.squeeze(1))
         x = F.leaky_relu(x)
         x = self.lin2(x)
-        x = F.sigmoid(x)
         return x 
 
     def init_hidden(self, bsz):
