@@ -27,7 +27,7 @@ NUM_DIMS = 50
 def train(generator, discriminator, args):
     #set up logger
 
-    indexer = annoy.AnnoyIndex(50, metric='euclidean')
+    indexer = annoy.AnnoyIndex(50, metric='angular')
     indexer.load('100_zero_emb.ann')
     id2word = pickle.load(open("id2word.p","rb"))
     
