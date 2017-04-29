@@ -12,11 +12,9 @@ import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
 from torch.autograd import Variable
-from discriminator_net import ImageDiscriminator
 from generator_net import TitleGenerator
 from feat_extractor import FeatureExtractor
 from dataset import PostFolder
-from dataset import titles_from_padded
 from tensorboard_logger import configure, log_value
 
 DATASET_SIZE = 682440
@@ -24,10 +22,10 @@ NUM_DIMS = 50
 
 # train will pull in the model, expected model is ImageDiscriminator
 
-def train(generator, discriminator, args):
+def train(generator, args):
     #set up logger
     timestring = str(date.today()) + '_' + time.strftime("%Hh-%Mm-%Ss", time.localtime(time.time()))
-    run_name = 'generator_training' + '_' + timestring
+    run_name = args.save_name + '_' + timestring
     configure("logs/" + run_name, flush_secs=5)
 
     posts_json = json.load(open(args.posts_json))
@@ -46,10 +44,13 @@ def train(generator, discriminator, args):
 
     image_feature_extractor = FeatureExtractor(args.dtype)
     
-    learning_rate = 0.001
-    gen_optimizer = optim.Adam(generator.parameters(), lr=learning_rate)
-    disc_optimizer = optim.Adam(discriminator.parameters(), lr=learning_rate)
-    bce = nn.BCELoss()
+    learning_rate = 0.0001
+    optimizer = optim.Adam(generator.parameters(), lr=learning_rate)
+    cos_loss = nn.CosineEmbeddingLoss()
+    mse_loss = nn.MSELoss()
+    cos_ones = Variable(torch.ones(args.batch_size)).type(args.dtype)
+    embed_zeros = Variable(torch.zeros(NUM_DIMS)).type(args.dtype)
+    
 
     batch_ctr = 0
     epoch_loss = 0
@@ -57,46 +58,42 @@ def train(generator, discriminator, args):
         if epoch > 0:
             last_epoch_loss = epoch_loss
         for i, (images, titles, title_lens, score) in enumerate(train_loader):
-            bsz = images.size(0)
-            zero_score = Variable(torch.zeros(bsz)).type(args.dtype)
-            ones_score = Variable(torch.ones(bsz)).type(args.dtype)
 
             image_feats = image_feature_extractor.make_features(Variable(images).type(args.dtype))
-
-            # Train discriminator on real and generated titles
-            disc_optimizer.zero_grad()
             
-            real_pred = discriminator(image_feats, Variable(titles).type(args.dtype))
-            disc_real_loss = bce(real_pred, ones_score)
-            disc_real_loss.backward()
-            
-            gen_titles = generator(image_feats)
-            gen_pred = discriminator(image_feats, gen_titles.detach())
-            disc_gen_loss = bce(gen_pred, zero_score)
-            disc_gen_loss.backward()
+            # putting seq_index first, then batch
+            titles = torch.transpose(titles, 0, 1)
+            titles_v = Variable(titles).type(args.dtype)
 
-            disc_optimizer.step()
+            # Train generator on next word
+            optimizer.zero_grad()
+            gen_pred = generator(image_feats)
 
-            # Train generator on loss of discriminator for generated titles
-            gen_optimizer.zero_grad()
-            gen_pred = discriminator(image_feats, gen_titles)
-            gen_loss = bce(gen_pred, ones_score)
-            gen_loss.backward()
-            gen_optimizer.step()
+            batch_loss = 0
+            for t in range(titles.size(0)):
+                # if titles_v[t].equal(embed_zeros):
+                gen_loss = mse_loss(gen_pred[t], titles_v[t])
+                # else:
+                #     gen_loss = cos_loss(titles_v[t], gen_pred[t], cos_ones)
+                batch_loss += gen_loss.data[0]
+                gen_loss.backward(retain_variables=True)
+                
+            optimizer.step()
             
-            log_value('Discriminator BCE loss (real)', disc_real_loss.data[0], batch_ctr)
-            log_value('Discriminator BCE loss (generated)', disc_gen_loss.data[0], batch_ctr)
-            log_value('Generator BCE loss', gen_loss.data[0], batch_ctr)
+            log_value('Generator cosine loss', batch_loss / args.batch_size, batch_ctr)
+            log_value('Learning rate', optimizer.param_groups[0]['lr'], batch_ctr)
 
-            
+            epoch_loss += gen_loss.data[0]
             batch_ctr += 1
             
             if batch_ctr % 10000 == 0:
-                pickle.dump(generator.state_dict(), open(args.gen_save_name + '.p', 'wb'))
+                pickle.dump(generator.state_dict(), open(args.save_name + '.p', 'wb'))
 
-            if batch_ctr % 10000 == 0:
-                pickle.dump(discriminator.state_dict(), open(args.disc_save_name + '.p', 'wb'))
-        
+        if epoch > 1: #arbitrary epoch choice 
+            if (last_epoch_loss - epoch_loss)/last_epoch_loss < .005:
+                for param in range(len(optimizer.param_groups)):
+                    optimizer.param_groups[param]['lr'] = optimizer.param_groups[param]['lr']/2
+
 
 
 parser = argparse.ArgumentParser(description='Evaluator Train')
@@ -106,13 +103,9 @@ parser.add_argument('--img-dir', type=str,
     help='image directory')
 parser.add_argument('--posts-json', type=str,
     help='path to json with reddit posts')
-parser.add_argument('--gen-save-name', type=str,
+parser.add_argument('--save-name', type=str,
     help='file name to save model params dict')
-parser.add_argument('--disc-save-name', type=str,
-    help='file name to save model params dict')
-parser.add_argument('--gen-load-name', type=str,
-    help='file name to load model params dict')
-parser.add_argument('--disc-load-name', type=str,
+parser.add_argument('--load-name', type=str,
     help='file name to load model params dict')
 parser.add_argument('--gpu', action="store_true",
     help='attempt to use gpu')
@@ -123,12 +116,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.dtype = torch.cuda.FloatTensor if torch.cuda.is_available() and args.gpu else torch.FloatTensor
 
-    discriminator = ImageDiscriminator(args.dtype, NUM_DIMS)
-    if args.disc_load_name is not None:
-        discriminator.load_state_dict(pickle.load(open(args.disc_load_name + '.p', 'rb')))
-
     generator = TitleGenerator(args.dtype, NUM_DIMS)
-    if args.gen_load_name is not None:
-        generator.load_state_dict(pickle.load(open(args.gen_load_name + '.p', 'rb')))
+    if args.load_name is not None:
+        generator.load_state_dict(pickle.load(open(args.load_name + '.p', 'rb')))
 
-    train(generator, discriminator, args)
+    train(generator, args)

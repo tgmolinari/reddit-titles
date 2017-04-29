@@ -16,7 +16,8 @@ class TitleGenerator(torch.nn.Module):
 
         self.lin1 = nn.Linear(4096, 128)
         self.word_gen = nn.GRUCell(138, 138) # 128 plus length 10 noise
-        self.lin2 = nn.Linear(138, num_dims)
+        self.lin2 = nn.Linear(138, 128)
+        self.lin3 = nn.Linear(128, num_dims)
         self.num_dims = num_dims
         self.dtype = dtype
         self.type(dtype)
@@ -33,9 +34,9 @@ class TitleGenerator(torch.nn.Module):
             ht = self.word_gen(ht, h0)
             h0 = ht
             embeddings = self.lin2(F.leaky_relu(ht))
+            embeddings = self.lin3(embeddings)
             titles[t] = embeddings
 
-        titles = torch.transpose(titles, 0, 1)
 
         return titles
 

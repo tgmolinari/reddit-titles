@@ -57,15 +57,6 @@ def embedding_to_title(annoy_indexer, id2word, titles):
         converted_titles.append(' '.join(out_title))
     return converted_titles
 
-def titles_from_padded(padded_seq, title_lens):
-    new_titles = [''] * padded_seq.size(0)
-    for i in range(padded_seq.size(0)):
-        for j in range(title_lens[i]):
-            charid = np.argmax(padded_seq[i][j].numpy())
-            if padded_seq[i][j][charid] == 1:
-                new_titles[i] += id2char[charid]
-    return [''.join(title) for title in new_titles]
-
 class PostFolder(data.Dataset):
     def __init__(self, post_json, img_dir, file_ext='.jpeg', transform=None, title_transform=None,
                  loader=default_loader):
