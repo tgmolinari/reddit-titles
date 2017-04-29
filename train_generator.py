@@ -71,19 +71,15 @@ def train(generator, args):
 
             batch_loss = 0
             for t in range(titles.size(0)):
-                # if titles_v[t].equal(embed_zeros):
-                gen_loss = mse_loss(gen_pred[t], titles_v[t])
-                # else:
-                #     gen_loss = cos_loss(titles_v[t], gen_pred[t], cos_ones)
-                batch_loss += gen_loss.data[0]
-                gen_loss.backward(retain_variables=True)
-                
+                batch_loss += mse_loss(gen_pred[t], titles_v[t])
+            batch_loss /= titles.size(0)
+            batch_loss.backward(retain_variables=True)
             optimizer.step()
             
-            log_value('Generator cosine loss', batch_loss / args.batch_size, batch_ctr)
+            log_value('Generator mse loss', batch_loss.data[0], batch_ctr)
             log_value('Learning rate', optimizer.param_groups[0]['lr'], batch_ctr)
 
-            epoch_loss += gen_loss.data[0]
+            epoch_loss += batch_loss.data[0]
             batch_ctr += 1
             
             if batch_ctr % 10000 == 0:
