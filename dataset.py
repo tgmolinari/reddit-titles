@@ -47,6 +47,16 @@ def default_title_transform(title):
             i += 1
     return transformed_title, max(i, 1)
 
+def embedding_to_title(annoy_indexer, id2word, titles):
+    converted_titles = []
+    for i in range(len(titles)):
+        out_title = []
+        for word in range(len(titles[i])):
+            nn_word = annoy_indexer.get_nns_by_vector(titles[i][word], 1, search_k=100000)
+            out_title.append(id2word[nn_word[0]])
+        converted_titles.append(' '.join(out_title))
+    return converted_titles
+
 def titles_from_padded(padded_seq, title_lens):
     new_titles = [''] * padded_seq.size(0)
     for i in range(padded_seq.size(0)):
